@@ -198,10 +198,12 @@ export function extractEntities(text: string): string[] {
 }
 
 function normalizeEntityType(type: string): string {
+  if (!type) return '';
   return type.replace(/^[BI]-/, '').trim().toUpperCase();
 }
 
 function normalizeMLEntityText(text: string): string {
+  if (!text) return '';
   return text
     .replace(/^##/, '')
     .replace(/\s+/g, ' ')
@@ -214,6 +216,7 @@ function collectMLEntities(rawEntities: MLEntity[] | undefined): string[] {
 
   const entities: string[] = [];
   for (const entity of rawEntities) {
+    if (!entity?.text || !entity?.type) continue;
     const type = normalizeEntityType(entity.type);
     if (!ML_ENTITY_TYPES.has(type)) continue;
     if (!Number.isFinite(entity.confidence) || entity.confidence < ML_ENTITY_MIN_CONFIDENCE) continue;

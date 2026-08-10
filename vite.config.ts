@@ -1,10 +1,13 @@
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { resolve, dirname, extname } from 'path';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { brotliCompress } from 'zlib';
 import { promisify } from 'util';
 import pkg from './package.json';
+
+const env = loadEnv('', process.cwd(), '');
+process.env = { ...process.env, ...env };
 
 const isE2E = process.env.VITE_E2E === '1';
 
@@ -236,44 +239,44 @@ function sebufApiPlugin(): Plugin {
       intelligenceServerMod, intelligenceHandlerMod,
       militaryServerMod, militaryHandlerMod,
     ] = await Promise.all([
-        import('./server/router'),
-        import('./server/cors'),
-        import('./server/error-mapper'),
-        import('./src/generated/server/worldmonitor/seismology/v1/service_server'),
-        import('./server/worldmonitor/seismology/v1/handler'),
-        import('./src/generated/server/worldmonitor/wildfire/v1/service_server'),
-        import('./server/worldmonitor/wildfire/v1/handler'),
-        import('./src/generated/server/worldmonitor/climate/v1/service_server'),
-        import('./server/worldmonitor/climate/v1/handler'),
-        import('./src/generated/server/worldmonitor/prediction/v1/service_server'),
-        import('./server/worldmonitor/prediction/v1/handler'),
-        import('./src/generated/server/worldmonitor/displacement/v1/service_server'),
-        import('./server/worldmonitor/displacement/v1/handler'),
-        import('./src/generated/server/worldmonitor/aviation/v1/service_server'),
-        import('./server/worldmonitor/aviation/v1/handler'),
-        import('./src/generated/server/worldmonitor/research/v1/service_server'),
-        import('./server/worldmonitor/research/v1/handler'),
-        import('./src/generated/server/worldmonitor/unrest/v1/service_server'),
-        import('./server/worldmonitor/unrest/v1/handler'),
-        import('./src/generated/server/worldmonitor/conflict/v1/service_server'),
-        import('./server/worldmonitor/conflict/v1/handler'),
-        import('./src/generated/server/worldmonitor/maritime/v1/service_server'),
-        import('./server/worldmonitor/maritime/v1/handler'),
-        import('./src/generated/server/worldmonitor/cyber/v1/service_server'),
-        import('./server/worldmonitor/cyber/v1/handler'),
-        import('./src/generated/server/worldmonitor/economic/v1/service_server'),
-        import('./server/worldmonitor/economic/v1/handler'),
-        import('./src/generated/server/worldmonitor/infrastructure/v1/service_server'),
-        import('./server/worldmonitor/infrastructure/v1/handler'),
-        import('./src/generated/server/worldmonitor/market/v1/service_server'),
-        import('./server/worldmonitor/market/v1/handler'),
-        import('./src/generated/server/worldmonitor/news/v1/service_server'),
-        import('./server/worldmonitor/news/v1/handler'),
-        import('./src/generated/server/worldmonitor/intelligence/v1/service_server'),
-        import('./server/worldmonitor/intelligence/v1/handler'),
-        import('./src/generated/server/worldmonitor/military/v1/service_server'),
-        import('./server/worldmonitor/military/v1/handler'),
-      ]);
+      import('./server/router'),
+      import('./server/cors'),
+      import('./server/error-mapper'),
+      import('./src/generated/server/worldmonitor/seismology/v1/service_server'),
+      import('./server/worldmonitor/seismology/v1/handler'),
+      import('./src/generated/server/worldmonitor/wildfire/v1/service_server'),
+      import('./server/worldmonitor/wildfire/v1/handler'),
+      import('./src/generated/server/worldmonitor/climate/v1/service_server'),
+      import('./server/worldmonitor/climate/v1/handler'),
+      import('./src/generated/server/worldmonitor/prediction/v1/service_server'),
+      import('./server/worldmonitor/prediction/v1/handler'),
+      import('./src/generated/server/worldmonitor/displacement/v1/service_server'),
+      import('./server/worldmonitor/displacement/v1/handler'),
+      import('./src/generated/server/worldmonitor/aviation/v1/service_server'),
+      import('./server/worldmonitor/aviation/v1/handler'),
+      import('./src/generated/server/worldmonitor/research/v1/service_server'),
+      import('./server/worldmonitor/research/v1/handler'),
+      import('./src/generated/server/worldmonitor/unrest/v1/service_server'),
+      import('./server/worldmonitor/unrest/v1/handler'),
+      import('./src/generated/server/worldmonitor/conflict/v1/service_server'),
+      import('./server/worldmonitor/conflict/v1/handler'),
+      import('./src/generated/server/worldmonitor/maritime/v1/service_server'),
+      import('./server/worldmonitor/maritime/v1/handler'),
+      import('./src/generated/server/worldmonitor/cyber/v1/service_server'),
+      import('./server/worldmonitor/cyber/v1/handler'),
+      import('./src/generated/server/worldmonitor/economic/v1/service_server'),
+      import('./server/worldmonitor/economic/v1/handler'),
+      import('./src/generated/server/worldmonitor/infrastructure/v1/service_server'),
+      import('./server/worldmonitor/infrastructure/v1/handler'),
+      import('./src/generated/server/worldmonitor/market/v1/service_server'),
+      import('./server/worldmonitor/market/v1/handler'),
+      import('./src/generated/server/worldmonitor/news/v1/service_server'),
+      import('./server/worldmonitor/news/v1/handler'),
+      import('./src/generated/server/worldmonitor/intelligence/v1/service_server'),
+      import('./server/worldmonitor/intelligence/v1/handler'),
+      import('./src/generated/server/worldmonitor/military/v1/service_server'),
+      import('./server/worldmonitor/military/v1/handler'),
+    ]);
 
     const serverOptions = { onError: errorMod.mapErrorToResponse };
     const allRoutes = [
@@ -477,6 +480,154 @@ function youtubeLivePlugin(): Plugin {
   };
 }
 
+function rssProxyPlugin(): Plugin {
+  return {
+    name: 'rss-proxy-dev',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url?.startsWith('/api/rss-proxy')) return next();
+        const url = new URL(req.url, 'http://localhost');
+        const targetUrl = url.searchParams.get('url');
+
+        if (!targetUrl) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'Missing url parameter' }));
+          return;
+        }
+
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 15000);
+
+          const response = await fetch(targetUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+              'Accept-Language': 'en-US,en;q=0.9',
+            },
+            signal: controller.signal,
+          });
+
+          clearTimeout(timer);
+
+          // Basic redirect handling for dev proxy (similar to Vercel fn)
+          let finalResponse = response;
+          if (response.status >= 300 && response.status < 400) {
+            const location = response.headers.get('location');
+            if (location) {
+              const controller2 = new AbortController();
+              const timer2 = setTimeout(() => controller2.abort(), 15000);
+              finalResponse = await fetch(new URL(location, targetUrl).href, {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                  'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+                },
+                signal: controller2.signal,
+              });
+              clearTimeout(timer2);
+            }
+          }
+
+          if (!finalResponse.ok) {
+            res.statusCode = finalResponse.status;
+            res.end();
+            return;
+          }
+
+          const data = await finalResponse.text();
+          res.setHeader('Content-Type', finalResponse.headers.get('content-type') || 'application/xml');
+          res.setHeader('Cache-Control', 'public, max-age=600');
+          res.end(data);
+        } catch (error: any) {
+          const isTimeout = error.name === 'AbortError';
+          console.error(`[RSS Proxy] Error fetching ${targetUrl}:`, error.message);
+          res.statusCode = isTimeout ? 504 : 502;
+          res.end(JSON.stringify({ error: isTimeout ? 'Feed timeout' : 'Failed to fetch feed' }));
+        }
+      });
+    }
+  };
+}
+
+function openskyProxyPlugin(): Plugin {
+  let token: string | null = null;
+  let tokenExpiry = 0;
+
+  async function getOpenSkyToken() {
+    const clientId = process.env.OPENSKY_CLIENT_ID;
+    const clientSecret = process.env.OPENSKY_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) return null;
+    if (token && Date.now() < tokenExpiry - 60000) return token;
+
+    try {
+      const postData = new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: clientId || '',
+        client_secret: clientSecret || '',
+      });
+
+      const resp = await fetch('https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: postData.toString(),
+        signal: AbortSignal.timeout(3000),
+      });
+
+      if (!resp.ok) return null;
+      const json = (await resp.json()) as any;
+      token = json.access_token;
+      tokenExpiry = Date.now() + (json.expires_in || 1800) * 1000;
+      return token;
+    } catch {
+      return null;
+    }
+  }
+
+  return {
+    name: 'opensky-proxy-dev',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url?.startsWith('/api/opensky')) return next();
+
+        const url = new URL(req.url, 'http://localhost');
+        const openskyUrl = new URL('https://opensky-network.org/api/states/all');
+        ['lamin', 'lomin', 'lamax', 'lomax'].forEach(k => {
+          const val = url.searchParams.get(k);
+          if (val) openskyUrl.searchParams.set(k, val);
+        });
+
+        res.setHeader('Content-Type', 'application/json');
+
+        try {
+          const authToken = await getOpenSkyToken();
+          const headers: Record<string, string> = {
+            'Accept': 'application/json',
+            'User-Agent': 'WorldMonitor/1.0',
+          };
+          if (authToken) {
+            headers['Authorization'] = `Bearer ${authToken}`;
+          }
+
+          const resp = await fetch(openskyUrl.toString(), { headers, signal: AbortSignal.timeout(3000) });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const data = await resp.text();
+          res.statusCode = 200;
+          res.setHeader('Cache-Control', 'public, max-age=30');
+          res.end(data);
+        } catch {
+          res.statusCode = 200;
+          res.setHeader('Cache-Control', 'public, max-age=60');
+          res.end(JSON.stringify({ time: Math.floor(Date.now() / 1000), states: [] }));
+        }
+      });
+    },
+  };
+}
+
+
+
+
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
@@ -485,6 +636,9 @@ export default defineConfig({
     htmlVariantPlugin(),
     polymarketPlugin(),
     youtubeLivePlugin(),
+    rssProxyPlugin(),
+    openskyProxyPlugin(),
+
     sebufApiPlugin(),
     brotliPrecompressPlugin(),
     VitePWA({
@@ -1028,18 +1182,7 @@ export default defineConfig({
           });
         },
       },
-      // OpenSky Network - Aircraft tracking (military flight detection)
-      '/api/opensky': {
-        target: 'https://opensky-network.org/api',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/api\/opensky/, ''),
-        configure: (proxy) => {
-          proxy.on('error', (err) => {
-            console.log('OpenSky proxy error:', err.message);
-          });
-        },
-      },
+      // OpenSky Network — handled by openskyProxyPlugin() with OAuth2 auth
       // ADS-B Exchange - Military aircraft tracking (backup/supplement)
       '/api/adsb-exchange': {
         target: 'https://adsbexchange.com/api',

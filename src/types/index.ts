@@ -498,6 +498,7 @@ export interface MapLayers {
   protests: boolean;
   flights: boolean;
   military: boolean;
+  commercialFlights: boolean;  // Live OpenSky commercial aircraft positions
   natural: boolean;
   spaceports: boolean;
   minerals: boolean;
@@ -520,6 +521,23 @@ export interface MapLayers {
   // Gulf FDI layers
   gulfInvestments: boolean;
 }
+
+// Real-time commercial aircraft from OpenSky Network
+export interface CommercialFlight {
+  icao24: string;         // ICAO 24-bit transponder address
+  callsign: string;       // Callsign (e.g. "UAL123")
+  originCountry: string;  // Country of origin
+  lat: number;
+  lon: number;
+  altitude: number;       // Geometric altitude in meters
+  heading: number;        // True track angle in degrees (0-360)
+  speed: number;          // Velocity over ground in m/s
+  verticalRate: number;   // Vertical rate in m/s (+ = climbing)
+  onGround: boolean;
+  squawk?: string;
+  lastContact: number;    // Unix timestamp of last contact
+}
+
 
 export interface AIDataCenter {
   id: string;

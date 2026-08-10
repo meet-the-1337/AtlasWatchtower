@@ -32,6 +32,7 @@ import { fetchConflictEvents, fetchUcdpClassifications, fetchHapiSummary, fetchU
 import { fetchUnhcrPopulation } from '@/services/displacement';
 import { fetchClimateAnomalies } from '@/services/climate';
 import { enrichEventsWithExposure } from '@/services/population-exposure';
+import { fetchCommercialFlights } from '@/services/commercial-flights';
 import { buildMapUrl, debounce, loadFromStorage, parseMapUrlState, saveToStorage, ExportPanel, getCircuitBreakerCooldownInfo, isMobileDevice, setTheme, getCurrentTheme } from '@/utils';
 import { reverseGeocode } from '@/utils/reverse-geocode';
 import { CountryBriefPage } from '@/components/CountryBriefPage';
@@ -2838,13 +2839,13 @@ export class App {
 
   private toggleFullscreen(): void {
     if (document.fullscreenElement) {
-      try { void document.exitFullscreen()?.catch(() => {}); } catch {}
+      try { void document.exitFullscreen()?.catch(() => { }); } catch { }
     } else {
       const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
       if (el.requestFullscreen) {
-        try { void el.requestFullscreen()?.catch(() => {}); } catch {}
+        try { void el.requestFullscreen()?.catch(() => { }); } catch { }
       } else if (el.webkitRequestFullscreen) {
-        try { el.webkitRequestFullscreen(); } catch {}
+        try { el.webkitRequestFullscreen(); } catch { }
       }
     }
   }
@@ -3140,6 +3141,7 @@ export class App {
     if (this.mapLayers.cables) tasks.push({ name: 'cables', task: runGuarded('cables', () => this.loadCableActivity()) });
     if (this.mapLayers.cables) tasks.push({ name: 'cableHealth', task: runGuarded('cableHealth', () => this.loadCableHealth()) });
     if (this.mapLayers.flights) tasks.push({ name: 'flights', task: runGuarded('flights', () => this.loadFlightDelays()) });
+    if (this.mapLayers.commercialFlights) tasks.push({ name: 'commercialFlights', task: runGuarded('commercialFlights', () => this.loadCommercialFlights()) });
     if (CYBER_LAYER_ENABLED && this.mapLayers.cyberThreats) tasks.push({ name: 'cyberThreats', task: runGuarded('cyberThreats', () => this.loadCyberThreats()) });
     if (this.mapLayers.techEvents || SITE_VARIANT === 'tech') tasks.push({ name: 'techEvents', task: runGuarded('techEvents', () => this.loadTechEvents()) });
 
@@ -3207,6 +3209,9 @@ export class App {
         case 'displacement':
         case 'climate':
           await this.loadIntelligenceSignals();
+          break;
+        case 'commercialFlights':
+          await this.loadCommercialFlights();
           break;
       }
     } finally {
@@ -3859,7 +3864,7 @@ export class App {
         // Store USNI fleet report for strategic posture panel (non-blocking)
         fetchUSNIFleetReport().then((report) => {
           if (report) this.intelligenceCache.usniFleet = report;
-        }).catch(() => {});
+        }).catch(() => { });
         ingestFlights(flightData.flights);
         ingestVessels(vesselData.vessels);
         ingestMilitaryForCII(flightData.flights, vesselData.vessels);
@@ -4209,6 +4214,28 @@ export class App {
     }
   }
 
+  private async loadCommercialFlights(): Promise<void> {
+    try {
+      this.map?.setLayerLoading('commercialFlights', true);
+      const flights = await fetchCommercialFlights();
+      this.map?.setCommercialFlights(flights);
+      const airborne = flights.filter(f => !f.onGround).length;
+      this.map?.setLayerReady('commercialFlights', flights.length > 0);
+      this.statusPanel?.updateFeed('Live Flights', {
+        status: flights.length > 0 ? 'ok' : 'warning',
+        itemCount: airborne,
+        errorMessage: flights.length === 0 ? 'No aircraft data received' : undefined,
+      });
+      this.statusPanel?.updateApi('Airplanes.live', { status: 'ok' });
+    } catch (error) {
+      this.map?.setLayerReady('commercialFlights', false);
+      this.statusPanel?.updateFeed('Live Flights', { status: 'error', errorMessage: String(error) });
+      this.statusPanel?.updateApi('Airplanes.live', { status: 'error' });
+    } finally {
+      this.map?.setLayerLoading('commercialFlights', false);
+    }
+  }
+
   private async loadFlightDelays(): Promise<void> {
     try {
       const delays = await fetchFlightDelays();
@@ -4245,9 +4272,10 @@ export class App {
         itemCount: militaryCount,
         errorMessage: militaryCount === 0 ? 'No military activity in view' : undefined,
       });
-      this.statusPanel?.updateApi('OpenSky', { status: 'ok' });
-      return;
+      this.statusPanel?.updateApi('Airplanes.live', { status: 'ok' });
+      // We don't return here anymore so polling works and updates intelligenceCache
     }
+
     try {
       if (isMilitaryVesselTrackingConfigured()) {
         initMilitaryVesselStream();
@@ -4264,7 +4292,7 @@ export class App {
       };
       fetchUSNIFleetReport().then((report) => {
         if (report) this.intelligenceCache.usniFleet = report;
-      }).catch(() => {});
+      }).catch(() => { });
       this.map?.setMilitaryFlights(flightData.flights, flightData.clusters);
       this.map?.setMilitaryVessels(vesselData.vessels, vesselData.clusters);
       ingestFlights(flightData.flights);
@@ -4309,12 +4337,12 @@ export class App {
         itemCount: militaryCount,
         errorMessage: militaryCount === 0 ? 'No military activity in view' : undefined,
       });
-      this.statusPanel?.updateApi('OpenSky', { status: 'ok' });
+      this.statusPanel?.updateApi('Airplanes.live', { status: 'ok' });
       dataFreshness.recordUpdate('opensky', flightData.flights.length);
     } catch (error) {
       this.map?.setLayerReady('military', false);
       this.statusPanel?.updateFeed('Military', { status: 'error', errorMessage: String(error) });
-      this.statusPanel?.updateApi('OpenSky', { status: 'error' });
+      this.statusPanel?.updateApi('Airplanes.live', { status: 'error' });
       dataFreshness.recordError('opensky', String(error));
     }
   }
@@ -4620,6 +4648,11 @@ export class App {
     this.scheduleRefresh('cables', () => this.loadCableActivity(), 30 * 60 * 1000, () => this.mapLayers.cables);
     this.scheduleRefresh('cableHealth', () => this.loadCableHealth(), 5 * 60 * 1000, () => this.mapLayers.cables);
     this.scheduleRefresh('flights', () => this.loadFlightDelays(), 10 * 60 * 1000, () => this.mapLayers.flights);
+    // Commercial flights: refresh every 5 seconds (Airplanes.live)
+    this.scheduleRefresh('commercialFlights', () => this.loadCommercialFlights(), 5_000, () => this.mapLayers.commercialFlights);
+
+    // Military flights: refresh every 5 seconds (Airplanes.live)
+    this.scheduleRefresh('military', () => this.loadMilitary(), 5_000, () => this.mapLayers.military);
     this.scheduleRefresh('cyberThreats', () => {
       this.cyberThreatsCache = null;
       return this.loadCyberThreats();

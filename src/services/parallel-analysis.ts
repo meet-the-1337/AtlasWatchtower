@@ -259,9 +259,10 @@ class ParallelAnalysisService {
   }
 
   private scoreByEntities(entities: NEREntity[]): PerspectiveScore {
-    const locations = entities.filter(e => e.type.includes('LOC'));
-    const people = entities.filter(e => e.type.includes('PER'));
-    const orgs = entities.filter(e => e.type.includes('ORG'));
+    const safeEntities = entities.filter(e => e?.type && e?.text);
+    const locations = safeEntities.filter(e => e.type.includes('LOC'));
+    const people = safeEntities.filter(e => e.type.includes('PER'));
+    const orgs = safeEntities.filter(e => e.type.includes('ORG'));
 
     const geopoliticalLocations = locations.filter(e =>
       FLASHPOINT_KEYWORDS.some(fp => e.text.toLowerCase().includes(fp))

@@ -300,8 +300,8 @@ export class NewsPanel extends Panel {
       this.renderClusters(enriched);
     } catch (error) {
       if (requestId !== this.renderRequestId) return;
-      console.error('[NewsPanel] Failed to cluster news:', error);
-      this.showError(t('common.failedClusterNews'));
+      console.warn('[NewsPanel] Clustering failed (timeout/error), falling back to flat view:', error);
+      // Removed this.showError() so we keep the already-rendered flat list visible.
     }
   }
 

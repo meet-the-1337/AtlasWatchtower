@@ -601,8 +601,8 @@ export class LiveNewsPanel extends Panel {
             return;
           }
 
-          // Desktop-specific last resort: switch to cloud bridge embed.
-          if (errorCode === 153 && isDesktopRuntime()) {
+          // Desktop-specific or localhost last resort: switch to cloud bridge embed.
+          if ((errorCode === 153 || errorCode === 150) && (isDesktopRuntime() || window.location.hostname === 'localhost')) {
             this.useDesktopEmbedProxy = true;
             this.destroyPlayer();
             this.ensurePlayerContainer();

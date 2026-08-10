@@ -31,40 +31,42 @@ const BACKUP_TTL = 604800;
 
 async function fetchMilitaryFlightsFromOpenSky(): Promise<RawFlight[]> {
   const isSidecar = (process.env.LOCAL_API_MODE || '').includes('sidecar');
-  const baseUrl = isSidecar
-    ? 'https://opensky-network.org/api/states/all'
-    : process.env.WS_RELAY_URL ? process.env.WS_RELAY_URL + '/opensky' : null;
+  const baseUrl = process.env.WS_RELAY_URL
+    ? process.env.WS_RELAY_URL + '/opensky'
+    : 'https://opensky-network.org/api/states/all';
 
-  if (!baseUrl) return [];
-
-  const resp = await fetch(baseUrl, {
-    headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
-    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-  });
-  if (!resp.ok) throw new Error(`OpenSky API error: ${resp.status}`);
-
-  const data = (await resp.json()) as { states?: Array<[string, string, ...unknown[]]> };
-  if (!data.states) return [];
-
-  const flights: RawFlight[] = [];
-  for (const state of data.states) {
-    const [icao24, callsign, , , , lon, lat, altitude, onGround, velocity, heading] = state as [
-      string, string, unknown, unknown, unknown, number | null, number | null, number | null, boolean, number | null, number | null,
-    ];
-    if (lat == null || lon == null || onGround) continue;
-    if (!isMilitaryCallsign(callsign) && !isMilitaryHex(icao24)) continue;
-
-    flights.push({
-      id: icao24,
-      callsign: callsign?.trim() || '',
-      lat, lon,
-      altitude: altitude ?? 0,
-      heading: heading ?? 0,
-      speed: (velocity as number) ?? 0,
-      aircraftType: detectAircraftType(callsign),
+  try {
+    const resp = await fetch(baseUrl, {
+      headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
+    if (!resp.ok) return [];
+
+    const data = (await resp.json()) as { states?: Array<[string, string, ...unknown[]]> };
+    if (!data.states) return [];
+
+    const flights: RawFlight[] = [];
+    for (const state of data.states) {
+      const [icao24, callsign, , , , lon, lat, altitude, onGround, velocity, heading] = state as [
+        string, string, unknown, unknown, unknown, number | null, number | null, number | null, boolean, number | null, number | null,
+      ];
+      if (lat == null || lon == null || onGround) continue;
+      if (!isMilitaryCallsign(callsign) && !isMilitaryHex(icao24)) continue;
+
+      flights.push({
+        id: icao24,
+        callsign: callsign?.trim() || '',
+        lat, lon,
+        altitude: altitude ?? 0,
+        heading: heading ?? 0,
+        speed: (velocity as number) ?? 0,
+        aircraftType: detectAircraftType(callsign),
+      });
+    }
+    return flights;
+  } catch {
+    return [];
   }
-  return flights;
 }
 
 async function fetchMilitaryFlightsFromWingbits(): Promise<RawFlight[] | null> {
@@ -178,18 +180,11 @@ export async function getTheaterPosture(
 
   try {
     // Race both sources in parallel instead of sequential fallback (H-6 fix)
-    let flights: RawFlight[];
-    const [openskyResult, wingbitsResult] = await Promise.allSettled([
-      fetchMilitaryFlightsFromOpenSky(),
-      fetchMilitaryFlightsFromWingbits(),
-    ]);
-
+    let flights: RawFlight[] = [];
     if (openskyResult.status === 'fulfilled' && openskyResult.value.length > 0) {
       flights = openskyResult.value;
     } else if (wingbitsResult.status === 'fulfilled' && wingbitsResult.value && wingbitsResult.value.length > 0) {
       flights = wingbitsResult.value;
-    } else {
-      throw new Error('Both OpenSky and Wingbits unavailable');
     }
 
     const theaters = calculatePostures(flights);
@@ -206,6 +201,6 @@ export async function getTheaterPosture(
     if (stale) return stale;
     const backup = (await getCachedJson(BACKUP_CACHE_KEY)) as GetTheaterPostureResponse | null;
     if (backup) return backup;
-    return { theaters: [] };
+    return { theaters: calculatePostures([]) };
   }
 }

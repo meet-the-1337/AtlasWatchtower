@@ -71,8 +71,8 @@ window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     typeof input === 'string'
       ? input
       : input instanceof URL
-      ? input.toString()
-      : input.url;
+        ? input.toString()
+        : input.url;
 
   if (url.includes('world-atlas@2/countries-50m.json')) {
     return new Response(JSON.stringify(MINIMAL_WORLD_TOPOLOGY), {
@@ -103,6 +103,7 @@ const layers = {
   protests: false,
   flights: false,
   military: false,
+  commercialFlights: false,
   natural: false,
   spaceports: false,
   minerals: false,
