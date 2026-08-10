@@ -25,6 +25,7 @@ import type {
   UcdpGeoEvent,
   CyberThreat,
   CableHealthRecord,
+  CommercialFlight,
 } from '@/types';
 import type { AirportDelayAlert } from '@/services/aviation';
 import type { DisplacementFlow } from '@/services/displacement';
@@ -264,6 +265,13 @@ export class MapContainer {
       this.deckGLMap?.setMilitaryFlights(flights, clusters);
     } else {
       this.svgMap?.setMilitaryFlights(flights, clusters);
+    }
+  }
+
+  public setCommercialFlights(flights: CommercialFlight[]): void {
+    // Commercial flights layer is DeckGL-only (too many points for SVG)
+    if (this.useDeckGL) {
+      this.deckGLMap?.setCommercialFlights(flights);
     }
   }
 

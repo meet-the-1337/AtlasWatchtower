@@ -171,8 +171,8 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
   {
     id: 'openskyRelay',
     name: 'OpenSky military flights',
-    description: 'OpenSky OAuth credentials for military flight data.',
-    requiredSecrets: ['VITE_OPENSKY_RELAY_URL', 'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET'],
+    description: 'OpenSky ADS-B data for military flight tracking. Works anonymously in dev mode; OAuth credentials provide higher rate limits.',
+    requiredSecrets: [],
     desktopRequiredSecrets: ['OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET'],
     fallback: 'Military flights fall back to limited/no data.',
   },

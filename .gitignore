@@ -1,31 +1,59 @@
+# Dependencies
 node_modules/
-.idea/
+
+# Build output
 dist/
+dist-ssr/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
 .DS_Store
-*.log
+Thumbs.db
+
+# Environment (NEVER commit real keys)
 .env
 .env.local
-.playwright-mcp/
-.vercel
-api/\[domain\]/v1/\[rpc\].js
-api/\[\[...path\]\].js
-.claude/
-.cursor/
-CLAUDE.md
+.env.*.local
 .env.vercel-backup
 .env.vercel-export
-.agent/
-.factory/
-.windsurf/
-skills/
-ideas/
-docs/internal/
-test-results/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Vercel
+.vercel
+
+# Tauri build artifacts
+src-tauri/target/
 src-tauri/sidecar/node/*
 !src-tauri/sidecar/node/.gitkeep
 
-# AI planning session state (not source code)
-.planning/
+# Test artifacts
+test-results/
 
-# Compiled sebuf gateway bundle (built by scripts/build-sidecar-sebuf.mjs)
-api/[[][[].*.js
+# AI assistant state
+.claude/
+.cursor/
+.claudedocs/
+.agent/
+.factory/
+.windsurf/
+.planning/
+skills/
+ideas/
+docs/internal/
+CLAUDE.md
+
+# Playwright
+.playwright-mcp/
+
+# Generated API stubs (rebuild with proto)
+# api/[domain]/v1/[rpc].js
+# api/[...path].js

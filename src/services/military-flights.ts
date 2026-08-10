@@ -14,11 +14,12 @@ import {
 } from './wingbits';
 import { isFeatureAvailable } from './runtime-config';
 
-// OpenSky Network API - use Railway relay (Vercel is blocked by OpenSky)
+// OpenSky Network API
+// Priority: 1) Railway relay (production)  2) Dev proxy (local dev)
 const wsRelayUrl = import.meta.env.VITE_WS_RELAY_URL || '';
 const OPENSKY_BASE_URL = wsRelayUrl
   ? wsRelayUrl.replace('wss://', 'https://').replace('ws://', 'http://').replace(/\/$/, '') + '/opensky'
-  : '';
+  : '/api/opensky/states/all';
 
 // Cache configuration
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes - match refresh interval
@@ -144,36 +145,32 @@ function getCountryFromOperator(operator: MilitaryOperator): string {
  * Check if a flight looks like a military aircraft
  */
 function isMilitaryFlight(state: OpenSkyStateArray): boolean {
-  const callsign = (state[1] || '').trim();
+  const callsign = (state[1] || '').trim().toUpperCase();
   const icao24 = state[0];
-  const originCountry = state[2];
 
-  // Check for known military callsigns (covers all patterns from config)
-  if (callsign && identifyByCallsign(callsign, originCountry)) {
-    return true;
-  }
+  // Check callsign against known military patterns
+  if (callsign && identifyByCallsign(callsign)) return true;
 
-  // Check for military hex code ranges (expanded list)
-  if (isKnownMilitaryHex(icao24)) {
-    return true;
-  }
+  // Check ICAO24 hex code against known military ranges
+  if (isKnownMilitaryHex(icao24)) return true;
 
-  // Extended list of countries with recognizable military patterns
-  const militaryCountries = [
-    'United States', 'United Kingdom', 'France', 'Germany', 'Israel',
-    'Turkey', 'Saudi Arabia', 'United Arab Emirates', 'Qatar', 'Kuwait',
-    'Japan', 'South Korea', 'Australia', 'Canada', 'Italy', 'Spain',
-    'Netherlands', 'Poland', 'Greece', 'Norway', 'Sweden', 'India',
-    'Pakistan', 'Egypt', 'Singapore', 'Taiwan'
+  // Common military callsign prefixes
+  const militaryPrefixes = [
+    'RCH', 'REACH', 'DUKE', 'EVAC', 'JAKE', 'TOPCAT',
+    'NAVY', 'ARMY', 'GOLD', 'HAWK', 'VIPER', 'COBRA',
+    'DOOM', 'RAGE', 'FURY', 'WARHAWK', 'EAGLE', 'RAPTOR',
+    'SAM', 'EXEC', 'SNTRY', 'AWACS', 'IRON', 'STEEL',
+    'RRR', 'CNV', 'AIO', 'GAF', 'IAM', 'BAF',
+    'FAF', 'RFR', 'SHF', 'MMF', 'PLF', 'HUF',
+    'CASA', 'NCHO', 'THUN', 'BOLT',
   ];
-
-  if (militaryCountries.includes(originCountry)) {
-    // Check for expanded military callsign patterns
-    const militaryPattern = /^(RCH|REACH|DUKE|KING|GOLD|NAVY|ARMY|MARINE|NATO|RAF|GAF|FAF|IAF|THK|TUR|RSAF|UAF|JPN|JASDF|ROKAF|KAF|RAAF|CANFORCE|CFC|AME|PLF|HAF|EGY|PAF|FORTE|HAWK|REAPER|COBRA|RIVET|OLIVE|SNTRY|DRAGN|BONE|DEATH|DOOM|TRIDENT|ASCOT|CNV|HMX|DUSTOFF|EVAC|MOOSE|HERKY)/i.test(callsign);
-    if (callsign && militaryPattern) {
-      return true;
-    }
+  for (const prefix of militaryPrefixes) {
+    if (callsign.startsWith(prefix)) return true;
   }
+
+  // Military squawk codes (e.g. discrete military squawks)
+  const squawk = state[14];
+  if (squawk === '7700' || squawk === '7600' || squawk === '7500') return true;
 
   return false;
 }
@@ -259,8 +256,6 @@ function parseOpenSkyResponse(data: OpenSkyResponse): MilitaryFlight[] {
  */
 async function fetchHotspotRegion(hotspot: typeof MILITARY_HOTSPOTS[number]): Promise<MilitaryFlight[]> {
   try {
-    if (!OPENSKY_BASE_URL) return [];
-
     const lamin = hotspot.lat - hotspot.radius;
     const lamax = hotspot.lat + hotspot.radius;
     const lomin = hotspot.lon - hotspot.radius;
@@ -497,7 +492,9 @@ export async function fetchMilitaryFlights(): Promise<{
   flights: MilitaryFlight[];
   clusters: MilitaryFlightCluster[];
 }> {
-  if (!isFeatureAvailable('openskyRelay')) {
+  // OpenSky works without credentials in dev mode (via Vite proxy)
+  // Only gate on openskyRelay if a relay URL is actually needed (not in dev)
+  if (wsRelayUrl && !isFeatureAvailable('openskyRelay')) {
     return { flights: [], clusters: [] };
   }
 
@@ -512,7 +509,10 @@ export async function fetchMilitaryFlights(): Promise<{
     let flights = await fetchFromOpenSky();
 
     if (flights.length === 0) {
-      throw new Error('No flights returned — upstream may be down');
+      if (flightCache) {
+        return { flights: flightCache.data, clusters: clusterFlights(flightCache.data) };
+      }
+      return { flights: [], clusters: [] };
     }
 
     // Enrich with Wingbits aircraft details (owner, operator, type)

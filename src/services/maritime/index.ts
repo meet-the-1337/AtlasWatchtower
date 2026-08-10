@@ -186,8 +186,10 @@ async function fetchRawRelaySnapshot(includeCandidates: boolean): Promise<unknow
   }
 
   if (isLocalhost) {
-    const local = await fetch(`${LOCAL_SNAPSHOT_FALLBACK}${query}`, { headers: { Accept: 'application/json' } });
-    if (local.ok) return local.json();
+    try {
+      const local = await fetch(`${LOCAL_SNAPSHOT_FALLBACK}${query}`, { headers: { Accept: 'application/json' } });
+      if (local.ok) return local.json();
+    } catch { /* Local relay unavailable -- fall through */ }
   }
 
   throw new Error('AIS raw relay snapshot unavailable');
