@@ -11,7 +11,7 @@
 
 **Please do NOT open a public GitHub issue for security vulnerabilities.**
 
-Report via email: 📧 **manansinghal1176@gmail.com**
+Report via email: 📧 **meet-the-1337@users.noreply.github.com**
 
 Include: description, reproduction steps, potential impact, and suggested fix.
 
